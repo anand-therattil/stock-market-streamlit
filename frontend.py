@@ -3,7 +3,8 @@ from datetime import datetime
 import streamlit as st # type: ignore
 import yfinance as yf
 import pandas as pd 
-import altair as alt
+import plotly.graph_objects as go
+
 
 # Get the historical Data for the particular stock 
 def get_stock_data(stock_name, start_date, end_date):
@@ -43,10 +44,16 @@ if(submit == True):
         data = get_stock_data(stock_name, date_range[0], date_range[1])
         date = data.index
         
-        st.subheader("Prices Variation")
-        st.line_chart(data.loc[:,['Close','Open']])
-        
         st.subheader("Historic Data")
         st.dataframe(data.iloc[:,1:],use_container_width=True)
         
-        
+        st.subheader("Prices Variation")
+        st.line_chart(data.loc[:,['Close','Open']])
+                
+        fig = go.Figure(data=[go.Candlestick(x=date,
+                open=data['Open'],
+                high=data['High'],
+                low=data['Low'],
+                close=data['Close'])])
+
+        st.plotly_chart(fig)
