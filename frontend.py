@@ -1,5 +1,5 @@
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timedelta
 import streamlit as st # type: ignore
 import yfinance as yf
 import pandas as pd 
@@ -8,6 +8,16 @@ import plotly.graph_objects as go
 # Model Initialization and Training
 from sklearn.ensemble import RandomForestClassifier
 import joblib
+
+# Sentiment Modules 
+# from transformers import AutoModelForSequenceClassification
+# from transformers import TFAutoModelForSequenceClassification
+# from transformers import AutoTokenizer, AutoConfig
+# import numpy as np
+# from scipy.special import softmax
+
+# News Module
+from gnews import GNews
 
 # Get the historical Data for the particular stock 
 def get_stock_data(stock_name, start_date, end_date):
@@ -35,11 +45,23 @@ def get_fundamental_financials(stock_name):
     return fundamental_data
 
     # Data Preparation
+
 def pre_process_data(data):
     data["open/Close"] = data['Open'] / data['Close']
     data["Volume/High"] = data['Volume'] / data['High']
     data['Volume/Low'] = data['Volume'] / data['Low']
     return data
+
+
+def get_news(stock_name):
+    google_news = GNews()
+    google_news.period = '1d'
+    news = google_news.get_news(stock_name)
+    news = pd.DataFrame(news)
+    news.drop(['published date', 'publisher'],axis=1, inplace=True) 
+       
+    return news
+
 
 with st.sidebar:
     st.header("Stock Analytics")
@@ -47,15 +69,16 @@ with st.sidebar:
                           ("SUZLON", "TATAMOTORS", "ONGC"))
     
     today = datetime.now()
+    yesterday = today - timedelta(days=7)
     date_range = st.date_input(
         "Select Date Range",
-        (today, today),
+        (yesterday, today),
         format="DD.MM.YYYY",
     )
     
 st.title(stock_name)
 
-financials, historic_data, charts = st.tabs(["Financials", "Historic Data", "Charts"])
+financials, historic_data, charts, news = st.tabs(["Financials", "Historic Data", "Charts", "News"])
 with financials:
     fundamental_financials = get_fundamental_financials(stock_name)
     st.info(fundamental_financials['longBusinessSummary'],icon=":material/info:")
@@ -123,3 +146,28 @@ with charts:
         st.info("Price Goes Down",  icon=":material/thumb_down:")      
     else:
         st.info("Price Goes Up",  icon=":material/thumb_up:")
+with news:
+    # scores = [0,0,0]
+    # MODEL = f"mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis"
+    # tokenizer = AutoTokenizer.from_pretrained(MODEL)
+    # config = AutoConfig.from_pretrained(MODEL)
+    # model = AutoModelForSequenceClassification.from_pretrained(MODEL)
+    #model.save_pretrained(MODEL)
+    # text = "Suzlon shares are unchanged"
+    # encoded_input = tokenizer(text, return_tensors='pt')
+    # output = model(**encoded_input)
+    # scores = output[0][0].detach().numpy()
+    # sentiment = ("Negative","Neutral","Positive")
+
+    # sentiment = dict(zip(sentiment, scores))
+    # st.json(sentiment)
+    
+    news = get_news(stock_name)
+    st.subheader("Todays News")
+    st.dataframe(news)
+
+
+    
+
+
+
