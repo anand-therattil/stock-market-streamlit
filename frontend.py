@@ -10,14 +10,39 @@ from sklearn.ensemble import RandomForestClassifier
 import joblib
 
 # Sentiment Modules 
-# from transformers import AutoModelForSequenceClassification
-# from transformers import TFAutoModelForSequenceClassification
-# from transformers import AutoTokenizer, AutoConfig
-# import numpy as np
-# from scipy.special import softmax
+from transformers import AutoModelForSequenceClassification
+from transformers import TFAutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoConfig
+import numpy as np
+from scipy.special import softmax
 
 # News Module
 from gnews import GNews
+
+# Time series Production using Prophet
+from prophet import Prophet
+import plotly.graph_objects as go
+from prophet.plot import plot_plotly # Import the plot_plotly function
+from prophet.serialize import model_to_json, model_from_json
+
+
+
+def train_prophet_model(stock_name):
+    end_date = datetime.today()
+    start_date =  end_date - timedelta(days=365)
+
+    data = get_stock_data(stock_name, start_date, end_date)
+    close_date = data.loc[:, 'Close']
+    date = data.index
+
+    test_data = pd.DataFrame({"ds":date,"y":close_date.values})
+    print(test_data)
+    m = Prophet()
+    m.fit(test_data)
+    # Python
+
+    with open(str(stock_name)+'.json', 'w') as fout:
+        fout.write(model_to_json(m))  # Save model
 
 # Get the historical Data for the particular stock 
 def get_stock_data(stock_name, start_date, end_date):
@@ -52,16 +77,31 @@ def pre_process_data(data):
     data['Volume/Low'] = data['Volume'] / data['Low']
     return data
 
+def get_sentiment(text):
+    scores = [0,0,0]
+    MODEL = f"mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis"
+    tokenizer = AutoTokenizer.from_pretrained(MODEL)
+    config = AutoConfig.from_pretrained(MODEL)
+    model = AutoModelForSequenceClassification.from_pretrained(MODEL)
+    # model.save_pretrained(MODEL)
+    encoded_input = tokenizer(text, return_tensors='pt')
+    output = model(**encoded_input)
+    
+    scores = list(output[0][0].detach().numpy())
+    index = scores.index(max(scores))
+    sentiment = ["Negative","Neutral","Positive"]
+    return sentiment[index]
 
 def get_news(stock_name):
     google_news = GNews()
     google_news.period = '1d'
     news = google_news.get_news(stock_name)
+
     news = pd.DataFrame(news)
-    news.drop(['published date', 'publisher'],axis=1, inplace=True) 
+    news.drop(['publisher', 'published date','description'], axis=1, inplace=True)
+    news.rename(columns={'title': 'Headline'}, inplace=True)
        
     return news
-
 
 with st.sidebar:
     st.header("Stock Analytics")
@@ -82,7 +122,7 @@ financials, historic_data, charts, news = st.tabs(["Financials", "Historic Data"
 with financials:
     fundamental_financials = get_fundamental_financials(stock_name)
     st.info(fundamental_financials['longBusinessSummary'],icon=":material/info:")
-    st.link_button("Suzlon website", fundamental_financials['website'])
+    st.link_button("Website", fundamental_financials['website'])
 
     # st.json(fundamental_financials)
     EBITDA, D2E, MCap = st.columns(3,gap="small")
@@ -136,7 +176,7 @@ with charts:
     
     model = RandomForestClassifier(n_estimators=len(predictors), min_samples_split=len(predictors), random_state=1)
 
-    model = joblib.load(r"C:\Users\Anand\Desktop\Coding\projects\stock_market_prediction\models\RandomForrest.pkl")
+    model = joblib.load(r"RandomForrest.pkl")
     last_date_data = processed_data.iloc[-1]
     last_date_data = [last_date_data.loc[predictors].values]
     predicted_value = model.predict(last_date_data)
@@ -146,28 +186,36 @@ with charts:
         st.info("Price Goes Down",  icon=":material/thumb_down:")      
     else:
         st.info("Price Goes Up",  icon=":material/thumb_up:")
-with news:
-    # scores = [0,0,0]
-    # MODEL = f"mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis"
-    # tokenizer = AutoTokenizer.from_pretrained(MODEL)
-    # config = AutoConfig.from_pretrained(MODEL)
-    # model = AutoModelForSequenceClassification.from_pretrained(MODEL)
-    #model.save_pretrained(MODEL)
-    # text = "Suzlon shares are unchanged"
-    # encoded_input = tokenizer(text, return_tensors='pt')
-    # output = model(**encoded_input)
-    # scores = output[0][0].detach().numpy()
-    # sentiment = ("Negative","Neutral","Positive")
 
-    # sentiment = dict(zip(sentiment, scores))
-    # st.json(sentiment)
+
+    st.subheader("Future Trend of the Stock market By Prophet ")
+    with open(str(stock_name)+'.json', 'r') as fin:
+        m = model_from_json(fin.read())  # Load model
+    
+    future = m.make_future_dataframe(periods=60)
+    forecast = m.predict(future)
+    fig = plot_plotly(m, forecast)
+    fig.update_layout(
+    paper_bgcolor='white',
+    plot_bgcolor='white'
+    )
+    st.plotly_chart(fig)
+
+    
+    
+with news:
     
     news = get_news(stock_name)
+    news['Sentiment'] = news['Headline'].apply(get_sentiment)
+    order = ['Headline',"Sentiment", "url"]
     st.subheader("Todays News")
-    st.dataframe(news)
-
-
+    st.dataframe(news[order])
+    avg_sentiment  = news.Sentiment.value_counts()
+    avg_sentiment = round((avg_sentiment / avg_sentiment.sum()) * 100,2)
+    
+    st.subheader("News Sentiment Averages ")
+    st.dataframe(avg_sentiment)
+    
     
 
-
-
+    
