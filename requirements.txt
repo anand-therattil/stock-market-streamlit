@@ -1,0 +1,11 @@
+yfinance==0.2.38
+streamlit==1.35.0
+pandas==2.2.2
+plotly==5.22.0
+scikit-learn==1.2.2
+joblib==1.4.2
+transformers==4.42.3
+numpy==1.26.4
+scipy==1.13.1
+gnews==0.3.7
+prophet==1.1.5
